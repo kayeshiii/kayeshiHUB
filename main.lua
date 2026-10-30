@@ -8,6 +8,7 @@ local HttpService = game:GetService("HttpService")
 local player = Players.LocalPlayer  
 local DISCORD_LINK = "https://discord.gg/tfXf5W6WCw"  
 local CONFIG_FILE = "kayeshiHUB_config.json"  
+local SETTING_PREFIX = "kayeshi:"  
 local FAR = 1e6  
 local MAIN_W, MAIN_H = 600, 360
 
@@ -51,6 +52,7 @@ local function btn(parent, text, color, h)
 	return b  
 end
 
+-- Urutan ini dipakai sebagai tingkat rarity: atas = umum, bawah = langka.  
 local EGG_NAMES = {  
 	"Common Egg", "Coral Egg", "Reef Egg", "Tidal Egg", "Deep Egg", "Abyss Egg",  
 	"Trench Egg", "Sovereign Egg", "Celestial Egg", "Eternal Egg", "Coral Reef Egg",  
@@ -58,16 +60,17 @@ local EGG_NAMES = {
 	"Spikey Egg", "Mamba Egg", "Inferno Egg", "Kraken Glory Egg",  
 	"Admin Abuse Seraph Egg", "KingKalolo Egg", "Golem Egg",  
 }  
-local EGG_LOWER = {}  
-for _, n in ipairs(EGG_NAMES) do  
+local EGG_LOWER, EGG_TIER = {}, {}  
+for i, n in ipairs(EGG_NAMES) do  
 	EGG_LOWER[string.lower(n)] = true  
+	EGG_TIER[string.lower(n)] = i  
 end
 
 local RARITY = {  
 	{"uncommon", 2}, {"common", 1}, {"rare", 3}, {"epic", 4}, {"legendary", 5},  
 	{"mythical", 6}, {"mythic", 6}, {"divine", 7}, {"secret", 8}, {"exotic", 8},  
 }  
-local MIN_STEPS = {{"Semua", 0}, {"Rare+", 3}, {"Epic+", 4}, {"Legend+", 5}, {"Mythic+", 6}, {"Divine+", 7}}  
+local MIN_STEPS = {{"Semua", 0}, {"Celestial+", 9}, {"Solar+", 15}, {"Kraken+", 19}}  
 local BAD_EGG = {  
 	"hatch", "incubat", "place", "plant", "shop", "inventory", "inventori", "simpan", "backpack",  
 	"machine", "npc", "penjaga", "tukar", "exchange", "buy", "beli",  
@@ -93,9 +96,9 @@ for _, shop in ipairs(SHOPS) do
 end
 
 local CFG = {  
-	Farm = true, RarityFirst = true, MinRank = 0, StealWait = 0.8, SearchRange = 300, IgnoreTime = 8,  
+	Farm = true, RarityFirst = true, MinRank = 0, StealWait = 0.8, IgnoreTime = 8, HoldTimeout = 6,  
 	AntiAFK = true, AfkIdle = 300, AutoSave = true,  
-	Collect = false, CollectWater = false,  
+	Collect = false,  
 	Place = false, PlaceCd = 2,  
 	Hatch = false, HatchCd = 3,  
 	AutoRadar = false, AutoFeed = false, OpenCd = 12,  
@@ -116,6 +119,7 @@ local shopNext = {radar = 0, feed = 0}
 local shopBusy = false  
 local shopCheckAt = 0  
 local dodgeNext, fireNext = 0, 0  
+local holdSince = 0  
 local minIdx = 1  
 local orderSeq = 0  
 local zone = nil  
@@ -216,19 +220,29 @@ local function promptPart(prompt)
 	return nil  
 end
 
+local promptsDirty = true  
+workspace.DescendantAdded:Connect(function(obj)  
+	if obj:IsA("ProximityPrompt") or obj:IsA("BasePart") or obj:IsA("Model") then  
+		promptsDirty = true  
+		caches.eggs.at = 0  
+		caches.collect.at = 0  
+	end  
+end)
+
 local function getPrompts()  
 	local c = caches.prompts  
-	if os.clock() - c.at < 0.4 then  
+	if not promptsDirty and os.clock() - c.at < 0.25 then  
 		return c.list  
 	end  
+	promptsDirty = false  
 	c.at = os.clock()  
 	local out = {}  
 	for _, obj in ipairs(workspace:GetDescendants()) do  
-		if obj:IsA("ProximityPrompt") and obj.Enabled then  
+		if obj:IsA("ProximityPrompt") then  
 			local part = promptPart(obj)  
 			if part then  
 				table.insert(out, {  
-					prompt = obj, part = part,  
+					prompt = obj, part = part, enabled = obj.Enabled,  
 					text = string.lower(obj.ActionText .. " " .. obj.ObjectText),  
 					chain = chainOf(obj),  
 				})  
@@ -258,7 +272,7 @@ local function findPrompt(words)
 	local now = os.clock()  
 	local best  
 	for _, en in ipairs(getPrompts()) do  
-		if hasAny(en.text, words) and not shopOfPrompt(en) and (cooldowns[en.prompt] or 0) < now then  
+		if en.enabled and hasAny(en.text, words) and not shopOfPrompt(en) and (cooldowns[en.prompt] or 0) < now then  
 			en.dist = (en.part.Position - r.Position).Magnitude  
 			if not best or en.dist < best.dist then  
 				best = en  
@@ -363,7 +377,7 @@ local function rankOf(text)
 	return best, label  
 end
 
-local function rarityOf(model, prompt)  
+local function rarityLabel(model, prompt)  
 	local found = {}  
 	local function push(v)  
 		if v ~= nil then  
@@ -389,15 +403,14 @@ local function rarityOf(model, prompt)
 		push(prompt.ActionText)  
 	end  
 	for _, v in ipairs(found) do  
-		if type(v) == "number" and v >= 1 and v <= 8 and v == math.floor(v) then  
-			return tostring(v), v  
-		end  
-		local rank, label = rankOf(v)  
-		if rank > 0 then  
-			return label, rank  
+		if type(v) == "string" then  
+			local rank, label = rankOf(v)  
+			if rank > 0 then  
+				return label  
+			end  
 		end  
 	end  
-	return nil, 0  
+	return nil  
 end
 
 local function eggModelOf(prompt)  
@@ -428,21 +441,22 @@ local function scanEggs(force)
 	c.at = os.clock()  
 	local out, seen = {}, {}  
 	for _, en in ipairs(getPrompts()) do  
-		if en.prompt.Enabled and not hasAny(en.text, BAD_EGG) and not shopOfPrompt(en) then  
+		if not hasAny(en.text, BAD_EGG) and not shopOfPrompt(en) then  
 			local model = eggModelOf(en.prompt)  
 			if model and not seen[model] then  
 				seen[model] = true  
 				local egg = addEgg(model.Name)  
+				local tier = EGG_TIER[string.lower(model.Name)] or 0  
 				local rc = rarityCache[model]  
 				if not rc or os.clock() - rc.at > 3 then  
-					local label, rank = rarityOf(model, en.prompt)  
-					rc = {label = label, rank = rank, at = os.clock()}  
+					rc = {label = rarityLabel(model, en.prompt), at = os.clock()}  
 					rarityCache[model] = rc  
 				end  
-				egg.rarity = rc.label  
+				local label = rc.label or (tier > 0 and ("Tier " .. tier) or nil)  
+				egg.rarity = label  
 				table.insert(out, {  
 					model = model, prompt = en.prompt, part = en.part,  
-					name = model.Name, rarity = rc.label, rank = rc.rank,  
+					name = model.Name, rarity = label, rank = tier,  
 				})  
 			end  
 		end  
@@ -464,8 +478,8 @@ local function pickEgg(list)
 		if eggOn(e.name) and e.rank >= CFG.MinRank and (ignored[e.model] or 0) < now then  
 			if not best then  
 				best = e  
-			elseif CFG.RarityFirst then  
-				if e.rank > best.rank or (e.rank == best.rank and e.dist < best.dist) then  
+			elseif CFG.RarityFirst and e.rank ~= best.rank then  
+				if e.rank > best.rank then  
 					best = e  
 				end  
 			elseif e.dist < best.dist then  
@@ -514,10 +528,6 @@ local function placeEgg(egg)
 	if not CFG.Place or not eggOn(egg) then  
 		return false  
 	end  
-	if not heldEgg(true) then  
-		S.status = "Pegang egg dulu untuk Auto Place"  
-		return false  
-	end  
 	local en = findPrompt(PLACE_WORDS)  
 	if not en then  
 		S.status = "Mesin place tidak ditemukan"  
@@ -532,7 +542,40 @@ local function placeEgg(egg)
 	return true  
 end
 
+local function holdingTick()  
+	local egg = heldEgg(true)  
+	if not egg then  
+		holdSince = 0  
+		return false  
+	end  
+	if holdSince == 0 then  
+		holdSince = os.clock()  
+	end  
+	if placeEgg(egg) then  
+		return true  
+	end  
+	if os.clock() - holdSince < CFG.HoldTimeout then  
+		S.status = "Bawa " .. egg .. " ke safe zone"  
+		local r = getRoot()  
+		if zone and r and (r.Position - zone).Magnitude > 6 then  
+			tpTo(zone)  
+		end  
+		return true  
+	end  
+	S.status = "Egg masih dipegang, lanjut steal"  
+	return false  
+end
+
 local function stealEgg(e)  
+	if not e.prompt.Enabled then  
+		S.status = "Menunggu " .. e.name .. " siap"  
+		waitFor(function()  
+			return e.prompt.Enabled or not e.prompt:IsDescendantOf(workspace)  
+		end, 3)  
+		if not e.prompt.Enabled then  
+			return false  
+		end  
+	end  
 	local had = heldEgg(true) ~= nil  
 	local function picked()  
 		return not e.prompt:IsDescendantOf(workspace) or not e.prompt.Enabled or (not had and heldEgg(true) ~= nil)  
@@ -565,24 +608,6 @@ local function hatchTick()
 	useMachine(en)  
 	S.hatch += 1  
 	return true  
-end
-
-local function isUnderwater(pos)  
-	local ok, res = pcall(function()  
-		local region = Region3.new(pos - Vector3.new(2, 2, 2), pos + Vector3.new(2, 2, 2)):ExpandToGrid(4)  
-		local mats, occs = workspace.Terrain:ReadVoxels(region, 4)  
-		for x = 1, #mats do  
-			for y = 1, #mats[x] do  
-				for z = 1, #mats[x][y] do  
-					if mats[x][y][z] == Enum.Material.Water and occs[x][y][z] > 0.5 then  
-						return true  
-					end  
-				end  
-			end  
-		end  
-		return false  
-	end)  
-	return ok and res or false  
 end
 
 local function collectTargets()  
@@ -629,7 +654,7 @@ local function pickCollect()
 	local now = os.clock()  
 	local best  
 	for _, c in ipairs(collectTargets()) do  
-		if targetAlive(c) and (ignored[c.key] or 0) < now and (not CFG.CollectWater or isUnderwater(c.part.Position)) then  
+		if targetAlive(c) and (ignored[c.key] or 0) < now then  
 			c.dist = (c.part.Position - r.Position).Magnitude  
 			if not best or c.dist < best.dist then  
 				best = c  
@@ -1006,12 +1031,7 @@ local function mainTick()
 			return  
 		end  
 	end  
-	local egg = heldEgg(true)  
-	if egg then  
-		if placeEgg(egg) then  
-			return  
-		end  
-		S.status = "Pegang " .. egg .. ", steal ditunda"  
+	if holdingTick() then  
 		return  
 	end  
 	if hatchTick() then  
@@ -1034,7 +1054,7 @@ local function mainTick()
 				S.steal += 1  
 				S.status = "Dapat " .. target.name .. tag  
 			else  
-				ignored[target.model] = os.clock() + CFG.IgnoreTime  
+				ignored[target.model] = os.clock() + (target.prompt.Enabled and CFG.IgnoreTime or 1)  
 				S.status = "Gagal steal " .. target.name  
 			end  
 			return  
@@ -1095,6 +1115,42 @@ local function buildData()
 	return HttpService:JSONEncode(data)  
 end
 
+local function syncMinIdx()  
+	for i, m in ipairs(MIN_STEPS) do  
+		if m[2] == CFG.MinRank then  
+			minIdx = i  
+			return  
+		end  
+	end  
+end
+
+local function applySettings(text)  
+	local raw = norm(text or "")  
+	raw = string.gsub(raw, "^" .. SETTING_PREFIX, "")  
+	raw = norm(raw)  
+	if raw == "" then  
+		return false, "kotak kosong"  
+	end  
+	local okD, data = pcall(HttpService.JSONDecode, HttpService, raw)  
+	if not okD or type(data) ~= "table" then  
+		return false, "format tidak valid, export ulang lalu salin utuh"  
+	end  
+	local applied = 0  
+	for k, v in pairs(data.cfg or {}) do  
+		if CFG[k] ~= nil and typeof(CFG[k]) == typeof(v) then  
+			CFG[k] = v  
+			applied += 1  
+		end  
+	end  
+	for k, v in pairs(data.eggs or {}) do  
+		if type(v) == "boolean" then  
+			eggSel[k] = v  
+		end  
+	end  
+	syncMinIdx()  
+	return true, applied  
+end
+
 local function saveConfig(force)  
 	if typeof(writefile) ~= "function" then  
 		S.config = "writefile tidak ada"  
@@ -1130,22 +1186,8 @@ local function loadConfig()
 		S.config = "gagal baca"  
 		return  
 	end  
-	local okD, data = pcall(HttpService.JSONDecode, HttpService, raw)  
-	if not okD or type(data) ~= "table" then  
-		S.config = "config rusak"  
-		return  
-	end  
-	for k, v in pairs(data.cfg or {}) do  
-		if CFG[k] ~= nil and typeof(CFG[k]) == typeof(v) then  
-			CFG[k] = v  
-		end  
-	end  
-	for k, v in pairs(data.eggs or {}) do  
-		if type(v) == "boolean" then  
-			eggSel[k] = v  
-		end  
-	end  
-	S.config = "dimuat"  
+	local okA = applySettings(raw)  
+	S.config = okA and "dimuat" or "config rusak"  
 end
 
 local function viewportSize()  
@@ -1471,7 +1513,8 @@ local function buildUI()
 	note(mp, "Teleport ke egg, tekan prompt, lalu kembali ke safe zone. Rarity tertinggi dulu.")  
 	toggle(mp, "Auto steal", "Farm")  
 	toggle(mp, "Rarity tertinggi dulu", "RarityFirst")  
-	stepper(mp, "Tunggu steal (detik)", "StealWait", 0.1, 0.1, 2)
+	stepper(mp, "Tunggu steal (detik)", "StealWait", 0.1, 0.1, 2)  
+	stepper(mp, "Batas bawa egg (detik)", "HoldTimeout", 1, 1, 30)
 
 	section(mp, "Anti AFK")  
 	note(mp, "Anti AFK melompat setelah karakter tidak menerima input selama waktu di bawah.")  
@@ -1540,6 +1583,52 @@ local function buildUI()
 		refresh()  
 	end)
 
+	section(mp, "Export / Import settingan")  
+	note(mp, "Export mengisi kotak dan menyalin settingan. Bagikan teksnya, lalu tempel di kotak dan tekan Import.")  
+	local transferBox = make("TextBox", {  
+		Size = UDim2.new(1, 0, 0, 58), BackgroundColor3 = C.Card, BorderSizePixel = 0, Text = "",  
+		PlaceholderText = "Tempel string settingan di sini", PlaceholderColor3 = C.Muted,  
+		TextColor3 = C.Text, Font = Enum.Font.Gotham, TextSize = 10, ClearTextOnFocus = false,  
+		MultiLine = true, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left,  
+		TextYAlignment = Enum.TextYAlignment.Top, LayoutOrder = nextOrder(),  
+	}, mp)  
+	corner(transferBox, 7)  
+	make("UIPadding", {PaddingLeft = UDim.new(0, 6), PaddingTop = UDim.new(0, 4)}, transferBox)  
+	local tr = row(mp)  
+	local exportBtn = btn(tr, "Export settingan", C.Accent, 28)  
+	exportBtn.Size = UDim2.new(0.5, -4, 1, 0)  
+	local importBtn = btn(tr, "Import settingan", C.Dark, 28)  
+	importBtn.Size = UDim2.new(0.5, -4, 1, 0)  
+	importBtn.Position = UDim2.new(0.5, 4, 0, 0)  
+	exportBtn.MouseButton1Click:Connect(function()  
+		local ok, json = pcall(buildData)  
+		if not ok then  
+			S.status = "Export gagal"  
+			refresh()  
+			return  
+		end  
+		local text = SETTING_PREFIX .. json  
+		transferBox.Text = text  
+		local copied = pcall(function()  
+			assert(type(setclipboard) == "function", "Clipboard tidak didukung")  
+			setclipboard(text)  
+		end)  
+		S.status = copied and "Settingan diexport dan disalin" or "Settingan diexport (salin manual dari kotak)"  
+		notify(S.status)  
+		refresh()  
+	end)  
+	importBtn.MouseButton1Click:Connect(function()  
+		local ok, res = applySettings(transferBox.Text)  
+		if ok then  
+			saveConfig(true)  
+			S.status = "Import berhasil (" .. tostring(res) .. " pengaturan)"  
+			notify(S.status)  
+		else  
+			S.status = "Import gagal: " .. tostring(res)  
+		end  
+		refresh()  
+	end)
+
 	section(mp, "Filter egg")  
 	eggControls(mp)  
 	local probeBtn = btn(mp, "Cek egg terdekat (rarity)", C.Dark, 28)  
@@ -1553,7 +1642,7 @@ local function buildUI()
 			end  
 		end  
 		if best then  
-			S.status = best.name .. " | rarity: " .. tostring(best.rarity)  
+			S.status = best.name .. " | tier: " .. tostring(best.rank)  
 			notify(S.status)  
 		else  
 			S.status = "Tidak ada egg terdeteksi"  
@@ -1563,12 +1652,7 @@ local function buildUI()
 
 	section(ap, "Auto place")  
 	note(ap, "Auto Place hanya berjalan saat karakter memegang egg. Teleport ke mesin place lalu tekan prompt.")  
-	toggle(ap, "Auto Place", "Place", function()  
-		if CFG.Place and not heldEgg(true) then  
-			S.status = "Pegang egg dulu. Auto Place jalan setelah egg dipegang"  
-			notify("Pegang egg dulu. Auto Place jalan setelah egg dipegang.")  
-		end  
-	end)  
+	toggle(ap, "Auto Place", "Place")  
 	stepper(ap, "Cooldown place (detik)", "PlaceCd", 0.5, 0.5, 10)  
 	section(ap, "Auto hatch")  
 	note(ap, "Saat tidak pegang egg, teleport ke mesin hatch terdekat lalu tekan prompt.")  
@@ -1613,7 +1697,6 @@ local function buildUI()
 	section(ep, "Auto collect event")  
 	note(ep, "Teleport ke objek atau prompt yang mengandung pumpkin, labu, atau token.")  
 	toggle(ep, "Auto collect event", "Collect")  
-	toggle(ep, "Hanya yang di dalam air", "CollectWater")  
 	section(ep, "Auto fire boss")  
 	note(ep, "Menembak boss (nama mengandung 'boss' atau atribut IsBoss). Menghindar dari indikator merah di bawah player.")  
 	toggle(ep, "Auto tembak boss", "Boss")  
@@ -1634,7 +1717,12 @@ local function buildUI()
 	toolBox.FocusLost:Connect(function()  
 		CFG.FireTool = toolBox.Text  
 		refresh()  
-	end)
+	end)  
+	paints[#paints + 1] = function()  
+		if not toolBox:IsFocused() then  
+			toolBox.Text = CFG.FireTool  
+		end  
+	end
 
 	section(dp, "Komunitas")  
 	note(dp, "Join komunitas kayeshiHUB untuk info, update script, dan saran fitur terbaru.")  
@@ -1759,6 +1847,7 @@ if not okUI then
 end
 
 pcall(loadConfig)  
+syncMinIdx()  
 refresh()
 
 UIS.InputBegan:Connect(function()  
