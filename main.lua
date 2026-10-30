@@ -1,7 +1,8 @@
 local Players = game:GetService("Players")  
 local UIS = game:GetService("UserInputService")  
 local StarterGui = game:GetService("StarterGui")  
-local RunService = game:GetService("RunService")
+local RunService = game:GetService("RunService")  
+local VirtualUser = game:GetService("VirtualUser")
 
 local player = Players.LocalPlayer
 
@@ -11,160 +12,132 @@ StarterGui:SetCore("SendNotification", {Title = "kayeshiHUB", Text = text, Durat
 end)  
 end
 
--- kayeshiHUB | Discord Popup
 local DISCORD_LINK = "https://discord.gg/tfXf5W6WCw"
 
-local function showDiscordPopup()
-    local playerGui = player:WaitForChild("PlayerGui")
+local function showDiscordPopup()  
+local playerGui = player:WaitForChild("PlayerGui")
 
-    local old = playerGui:FindFirstChild("kayeshiDiscordPopup")
-    if old then old:Destroy() end
+local old = playerGui:FindFirstChild("kayeshiDiscordPopup")  
+if old then old:Destroy() end
 
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "kayeshiDiscordPopup"
-    gui.ResetOnSpawn = false
-    gui.DisplayOrder = 10000
-    gui.IgnoreGuiInset = true
-    gui.Parent = playerGui
+local gui = Instance.new("ScreenGui")  
+gui.Name = "kayeshiDiscordPopup"  
+gui.ResetOnSpawn = false  
+gui.DisplayOrder = 10000  
+gui.IgnoreGuiInset = true  
+gui.Parent = playerGui
 
-    local bg = Instance.new("Frame")
-    bg.Size = UDim2.fromScale(1, 1)
-    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    bg.BackgroundTransparency = 0.4
-    bg.BorderSizePixel = 0
-    bg.Parent = gui
+local bg = Instance.new("Frame")  
+bg.Size = UDim2.fromScale(1, 1)  
+bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)  
+bg.BackgroundTransparency = 0.4  
+bg.BorderSizePixel = 0  
+bg.Parent = gui
 
-    local panel = Instance.new("Frame")
-    panel.Size = UDim2.new(0.86, 0, 0, 230)
-    panel.AnchorPoint = Vector2.new(0.5, 0.5)
-    panel.Position = UDim2.fromScale(0.5, 0.5)
-    panel.BackgroundColor3 = Color3.fromRGB(24, 27, 35)
-    panel.BorderSizePixel = 0
-    panel.Parent = bg
+local panel = Instance.new("Frame")  
+panel.Size = UDim2.new(0.86, 0, 0, 230)  
+panel.AnchorPoint = Vector2.new(0.5, 0.5)  
+panel.Position = UDim2.fromScale(0.5, 0.5)  
+panel.BackgroundColor3 = Color3.fromRGB(24, 27, 35)  
+panel.BorderSizePixel = 0  
+panel.Parent = bg
 
-    local sizeLimit = Instance.new("UISizeConstraint")
-    sizeLimit.MaxSize = Vector2.new(420, 260)
-    sizeLimit.MinSize = Vector2.new(260, 210)
-    sizeLimit.Parent = panel
+local sizeLimit = Instance.new("UISizeConstraint")  
+sizeLimit.MaxSize = Vector2.new(420, 260)  
+sizeLimit.MinSize = Vector2.new(260, 210)  
+sizeLimit.Parent = panel
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 14)
-    corner.Parent = panel
+Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 14)
 
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(88, 101, 242)
-    stroke.Thickness = 2
-    stroke.Parent = panel
+local stroke = Instance.new("UIStroke")  
+stroke.Color = Color3.fromRGB(88, 101, 242)  
+stroke.Thickness = 2  
+stroke.Parent = panel
 
-    local function makeLabel(text, size, position, font, color)
-        local label = Instance.new("TextLabel")
-        label.Size = size
-        label.Position = position
-        label.BackgroundTransparency = 1
-        label.Text = text
-        label.Font = font
-        label.TextSize = 14
-        label.TextColor3 = color
-        label.TextWrapped = true
-        label.Parent = panel
-        return label
-    end
-
-    makeLabel(
-        "kayeshiHUB",
-        UDim2.new(1, -60, 0, 35),
-        UDim2.fromOffset(18, 18),
-        Enum.Font.GothamBold,
-        Color3.fromRGB(255, 255, 255)
-    ).TextSize = 22
-
-    local close = Instance.new("TextButton")
-    close.Size = UDim2.fromOffset(34, 34)
-    close.Position = UDim2.new(1, -46, 0, 10)
-    close.BackgroundColor3 = Color3.fromRGB(55, 59, 70)
-    close.Text = "X"
-    close.TextColor3 = Color3.new(1, 1, 1)
-    close.TextSize = 18
-    close.Font = Enum.Font.GothamBold
-    close.Parent = panel
-    Instance.new("UICorner", close).CornerRadius = UDim.new(0, 8)
-
-    makeLabel(
-        "JOIN DISCORD COMMUNITY",
-        UDim2.new(1, -30, 0, 30),
-        UDim2.fromOffset(15, 62),
-        Enum.Font.GothamBold,
-        Color3.fromRGB(170, 180, 255)
-    ).TextSize = 15
-
-    makeLabel(
-        "Join komunitas kayeshiHUB untuk info, update script, dan saran fitur terbaru.",
-        UDim2.new(1, -36, 0, 52),
-        UDim2.fromOffset(18, 95),
-        Enum.Font.Gotham,
-        Color3.fromRGB(220, 222, 230)
-    ).TextSize = 13
-
-    local function makeButton(text, y, color)
-        local button = Instance.new("TextButton")
-        button.Size = UDim2.new(1, -36, 0, 36)
-        button.Position = UDim2.fromOffset(18, y)
-        button.BackgroundColor3 = color
-        button.Text = text
-        button.TextColor3 = Color3.new(1, 1, 1)
-        button.TextSize = 13
-        button.Font = Enum.Font.GothamBold
-        button.Parent = panel
-        Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)
-        return button
-    end
-
-    local join = makeButton(
-        "JOIN DISCORD",
-        155,
-        Color3.fromRGB(88, 101, 242)
-    )
-
-    local copy = makeButton(
-        "COPY INVITE LINK",
-        198,
-        Color3.fromRGB(55, 59, 70)
-    )
-
-    close.MouseButton1Click:Connect(function()
-        gui:Destroy()
-    end)
-
-    join.MouseButton1Click:Connect(function()
-        if setclipboard then
-            pcall(setclipboard, DISCORD_LINK)
-        end
-        StarterGui:SetCore("SendNotification", {
-            Title = "kayeshiHUB",
-            Text = "Link Discord disalin. Paste di browser untuk bergabung.",
-            Duration = 5
-        })
-    end)
-
-    copy.MouseButton1Click:Connect(function()
-        local ok = pcall(function()
-            assert(type(setclipboard) == "function", "Clipboard tidak didukung")
-            setclipboard(DISCORD_LINK)
-        end)
-
-        StarterGui:SetCore("SendNotification", {
-            Title = "kayeshiHUB",
-            Text = ok and "Link berhasil disalin!" or DISCORD_LINK,
-            Duration = 5
-        })
-    end)
+local function makeLabel(text, size, position, font, color, textSize)  
+local label = Instance.new("TextLabel")  
+label.Size = size  
+label.Position = position  
+label.BackgroundTransparency = 1  
+label.Text = text  
+label.Font = font  
+label.TextSize = textSize  
+label.TextColor3 = color  
+label.TextWrapped = true  
+label.Parent = panel  
+return label  
 end
 
-task.spawn(function()
-    task.wait(1)
-    pcall(showDiscordPopup)
+makeLabel("kayeshiHUB", UDim2.new(1, -60, 0, 35), UDim2.fromOffset(18, 18),  
+Enum.Font.GothamBold, Color3.fromRGB(255, 255, 255), 22)
+
+makeLabel("JOIN DISCORD COMMUNITY", UDim2.new(1, -30, 0, 30), UDim2.fromOffset(15, 62),  
+Enum.Font.GothamBold, Color3.fromRGB(170, 180, 255), 15)
+
+makeLabel("Join komunitas kayeshiHUB untuk info, update script, dan saran fitur terbaru.",  
+UDim2.new(1, -36, 0, 52), UDim2.fromOffset(18, 95),  
+Enum.Font.Gotham, Color3.fromRGB(220, 222, 230), 13)
+
+local close = Instance.new("TextButton")  
+close.Size = UDim2.fromOffset(34, 34)  
+close.Position = UDim2.new(1, -46, 0, 10)  
+close.BackgroundColor3 = Color3.fromRGB(55, 59, 70)  
+close.Text = "X"  
+close.TextColor3 = Color3.new(1, 1, 1)  
+close.TextSize = 18  
+close.Font = Enum.Font.GothamBold  
+close.Parent = panel  
+Instance.new("UICorner", close).CornerRadius = UDim.new(0, 8)
+
+local function makeButton(text, y, color)  
+local button = Instance.new("TextButton")  
+button.Size = UDim2.new(1, -36, 0, 36)  
+button.Position = UDim2.fromOffset(18, y)  
+button.BackgroundColor3 = color  
+button.Text = text  
+button.TextColor3 = Color3.new(1, 1, 1)  
+button.TextSize = 13  
+button.Font = Enum.Font.GothamBold  
+button.Parent = panel  
+Instance.new("UICorner", button).CornerRadius = UDim.new(0, 8)  
+return button  
+end
+
+local join = makeButton("JOIN DISCORD", 155, Color3.fromRGB(88, 101, 242))  
+local copy = makeButton("COPY INVITE LINK", 198, Color3.fromRGB(55, 59, 70))
+
+close.MouseButton1Click:Connect(function()  
+gui:Destroy()  
 end)
 
+join.MouseButton1Click:Connect(function()  
+if setclipboard then  
+pcall(setclipboard, DISCORD_LINK)  
+end  
+StarterGui:SetCore("SendNotification", {  
+Title = "kayeshiHUB",  
+Text = "Link Discord disalin. Paste di browser untuk bergabung.",  
+Duration = 5,  
+})  
+end)
+
+copy.MouseButton1Click:Connect(function()  
+local ok = pcall(function()  
+assert(type(setclipboard) == "function", "Clipboard tidak didukung")  
+setclipboard(DISCORD_LINK)  
+end)  
+StarterGui:SetCore("SendNotification", {  
+Title = "kayeshiHUB",  
+Text = ok and "Link berhasil disalin!" or DISCORD_LINK,  
+Duration = 5,  
+})  
+end)  
+end
+
+task.spawn(function()  
+task.wait(1)  
+pcall(showDiscordPopup)  
+end)
 
 local EGG_NAMES = {  
 "Common Egg", "Coral Egg", "Reef Egg", "Tidal Egg", "Deep Egg", "Abyss Egg",  
@@ -186,26 +159,30 @@ mythic = 6, mythical = 6, divine = 7, secret = 8, exotic = 8,
 
 local BAD_WORDS = {"hatch", "incubat", "shop", "sell", "display", "showcase", "inventory", "machine"}
 
-local CFG = {
-    Farming = false,
-    ReturnToZone = false,
-    BestFirst = false,
-    ZoneRadiusOn = false,
-    ZoneRadius = 250,
-    ESP = false,
-    ESPMode = "Nama",
-    WalkOn = false,
-    WalkSpeed = 16,
-    JumpOn = false,
-    JumpPower = 50,
-    SwimOn = false,
-    SwimSpeed = 50,
-    Offset = Vector3.new(0, 3, 0),
-    ActionDelay = 0.35,
-    ESPDelay = 0.6,
-    PickupWait = 1.5,
-    IgnoreTime = 8,
-    ReturnRadius = 8,
+local CFG = {  
+Farming = true,  
+ReturnToZone = true,  
+BestFirst = true,  
+ZoneRadiusOn = false,  
+ZoneRadius = 250,  
+ZoneSkipRadius = 15,  
+ESP = false,  
+ESPMode = "Nama",  
+WalkOn = false,  
+WalkSpeed = 16,  
+JumpOn = false,  
+JumpPower = 50,  
+SwimOn = true,  
+SwimSpeed = 50,  
+AntiAFK = true,  
+Offset = Vector3.new(0, 3, 0),  
+ActionDelay = 0.05,  
+ESPDelay = 0.6,  
+IgnoreTime = 8,  
+ReturnRadius = 8,  
+ScanCache = 0.15,  
+AfkInterval = 60,  
+CarryTimeout = 10,  
 }
 
 local C = {  
@@ -226,9 +203,10 @@ esp = {sel = {}, order = {}, buttons = {}},
 local ignored, espItems = {}, {}  
 local ui, tabs = {}, {}  
 local farmed, detected = 0, 0  
+local lastSkipped = 0  
 local status = "Siap"  
 local zone = nil  
-local carryUntil = 0  
+local carryStart = 0  
 local baseWalk, baseJump = 16, 50  
 local forcedWalk = false  
 local inWaterNow = false  
@@ -309,25 +287,60 @@ return false
 end
 
 local function carrying()  
-if holdingEgg() then  
-carryUntil = os.clock() + 2  
+if not holdingEgg() then  
+carryStart = 0  
+return false  
 end  
-return os.clock() < carryUntil  
+if carryStart == 0 then  
+carryStart = os.clock()  
+end  
+return os.clock() - carryStart < CFG.CarryTimeout  
+end
+
+local function rankOfText(text)  
+local lower = string.lower(text)  
+local best = 0  
+for word, rank in pairs(RARITY_RANK) do  
+if string.find(lower, word) and rank > best then  
+best = rank  
+end  
+end  
+return best  
+end
+
+local function readRarityValue(obj)  
+local raw = obj:GetAttribute("Rarity")  
+if raw ~= nil then  
+return raw  
+end  
+for key, value in pairs(obj:GetAttributes()) do  
+local k = string.lower(key)  
+if string.find(k, "rarity") or string.find(k, "tier") then  
+return value  
+end  
+end  
+local v = obj:FindFirstChild("Rarity", true)  
+if v and v:IsA("ValueBase") then  
+return v.Value  
+end  
+return nil  
 end
 
 local function rarityOf(model)  
-local raw = model:GetAttribute("Rarity")  
-if raw == nil then  
-local v = model:FindFirstChild("Rarity", true)  
-if v and v:IsA("ValueBase") then  
-raw = v.Value  
-end  
+local raw  
+local node = model  
+while node and node ~= workspace and raw == nil do  
+raw = readRarityValue(node)  
+node = node.Parent  
 end  
 if raw == nil then  
 return nil, 0  
 end  
+if type(raw) == "number" then  
+return tostring(raw), math.floor(raw)  
+end  
 local text = tostring(raw)  
-return text, RARITY_RANK[string.lower(text)] or 0  
+return text, rankOfText(text)  
 end
 
 local function eggOf(prompt)  
@@ -425,7 +438,14 @@ end
 refresh()  
 end
 
-local function scan()  
+local scanCache, scanAt = {}, 0
+
+local function scan(force)  
+if not force and os.clock() - scanAt < CFG.ScanCache then  
+return scanCache  
+end  
+scanAt = os.clock()
+
 local found, seen = {}, {}  
 for _, prompt in ipairs(workspace:GetDescendants()) do  
 if prompt:IsA("ProximityPrompt") and prompt.Enabled then  
@@ -443,18 +463,24 @@ name = model.Name, rarity = rarity, rank = rank,
 end  
 end  
 end  
-end  
+end
+
 detected = #found  
+scanCache = found  
 return found  
 end
 
 local function pickTarget(list, root)  
 local now = os.clock()  
 local best  
+local skipped = 0  
 for _, e in ipairs(list) do  
 e.dist = (e.part.Position - root.Position).Magnitude  
 local inZone = not (CFG.ZoneRadiusOn and zone) or (e.part.Position - zone).Magnitude <= CFG.ZoneRadius  
 if lists.farm.sel[e.name] and inZone and (ignored[e.model] or 0) < now then  
+if zone and (e.part.Position - zone).Magnitude <= CFG.ZoneSkipRadius then  
+skipped += 1  
+else  
 if not best then  
 best = e  
 elseif CFG.BestFirst and e.rank ~= best.rank then  
@@ -466,6 +492,8 @@ best = e
 end  
 end  
 end  
+end  
+lastSkipped = skipped  
 return best  
 end
 
@@ -474,22 +502,28 @@ if not getRoot() then
 return false  
 end  
 moveTo(e.part.Position + CFG.Offset)  
-task.wait(0.2)  
 if typeof(fireproximityprompt) == "function" then  
 fireproximityprompt(e.prompt)  
 else  
 e.prompt:InputHoldBegin()  
-task.wait(e.prompt.HoldDuration + 0.2)  
+task.wait(e.prompt.HoldDuration)  
 e.prompt:InputHoldEnd()  
 end  
-local deadline = os.clock() + CFG.PickupWait  
-repeat  
 task.wait(0.1)  
-until holdingEgg() or not e.prompt:IsDescendantOf(workspace) or os.clock() > deadline  
 return holdingEgg() or not e.prompt:IsDescendantOf(workspace)  
 end
 
+local function returnToZone()  
+local r = getRoot()  
+if CFG.ReturnToZone and zone and r and (r.Position - zone).Magnitude > CFG.ReturnRadius then  
+moveTo(zone)  
+end  
+end
+
 local function step()  
+if not CFG.Farming then  
+return  
+end  
 local r = getRoot()  
 if not r then  
 status = "Menunggu karakter"  
@@ -497,22 +531,29 @@ return
 end  
 if carrying() then  
 status = "Membawa egg, balik ke zona"  
+returnToZone()  
 return  
 end  
 local target = pickTarget(scan(), r)  
 if not target then  
-status = detected == 0 and "Tidak ada egg di area ini" or "Tidak ada egg yang lolos filter"  
+if detected == 0 then  
+status = "Tidak ada egg di area ini"  
+elseif lastSkipped > 0 then  
+status = "Dilewati " .. lastSkipped .. " egg di radius zona"  
+else  
+status = "Tidak ada egg yang lolos filter"  
+end  
 return  
 end  
 status = "Ambil " .. target.name .. (target.rarity and (" (" .. target.rarity .. ")") or "")  
 refresh()  
+if not CFG.Farming then  
+return  
+end  
 if collect(target) then  
 farmed += 1  
-carryUntil = os.clock() + 5  
 status = "Diambil " .. target.name  
-if CFG.ReturnToZone and zone then  
-moveTo(zone)  
-end  
+returnToZone()  
 else  
 ignored[target.model] = os.clock() + CFG.IgnoreTime  
 status = "Gagal ambil " .. target.name  
@@ -522,7 +563,7 @@ end
 local function probe()  
 local r = getRoot()  
 local best  
-for _, e in ipairs(scan()) do  
+for _, e in ipairs(scan(true)) do  
 if not best then  
 best = e  
 elseif r and (e.part.Position - r.Position).Magnitude < (best.part.Position - r.Position).Magnitude then  
@@ -534,7 +575,7 @@ status = "Tidak ada egg terdeteksi"
 notify(status)  
 return  
 end  
-local parts = {}  
+local parts = {"rank=" .. tostring(best.rank), "rarity=" .. tostring(best.rarity)}  
 for k, v in pairs(best.model:GetAttributes()) do  
 table.insert(parts, k .. "=" .. tostring(v))  
 end  
@@ -864,8 +905,7 @@ BorderSizePixel = 0,
 }, main)  
 corner(right, 8)
 
-local tabDefs = {{"egg", "Egg"}, {"esp", "ESP"}, {"player", "Player"}}  
-for i, t in ipairs(tabDefs) do  
+for i, t in ipairs({{"egg", "Egg"}, {"esp", "ESP"}, {"player", "Player"}}) do  
 local b = btn(right, t[2], C.Dark, 26)  
 b.Size = UDim2.new(1 / 3, -8, 0, 26)  
 b.Position = UDim2.new((i - 1) / 3, 4, 0, 6)  
@@ -924,7 +964,9 @@ ui.swim.Position = UDim2.fromOffset(0, 120)
 ui.swimVal = stepper(pagePlayer, 150, "SwimSpeed", function(d)  
 CFG.SwimSpeed = math.clamp(CFG.SwimSpeed + d * 10, 16, 300)  
 refresh()  
-end)
+end)  
+ui.afk = btn(pagePlayer, "", C.Dark, 26)  
+ui.afk.Position = UDim2.fromOffset(0, 180)
 
 local logo = make("Frame", {  
 Position = UDim2.new(0, 10, 0.5, -22),  
@@ -978,6 +1020,7 @@ ui.espMode.TextColor3 = C.Text
 paintToggle(ui.walk, "WalkSpeed", CFG.WalkOn)  
 paintToggle(ui.jump, "JumpPower", CFG.JumpOn)  
 paintToggle(ui.swim, "SwimSpeed", CFG.SwimOn)  
+paintToggle(ui.afk, "AntiAFK", CFG.AntiAFK)  
 ui.speedVal.Text = tostring(CFG.WalkSpeed)  
 ui.jumpVal.Text = tostring(CFG.JumpPower)  
 ui.swimVal.Text = tostring(CFG.SwimSpeed)  
@@ -1082,6 +1125,10 @@ ui.swim.MouseButton1Click:Connect(function()
 CFG.SwimOn = not CFG.SwimOn  
 applyMove()  
 refresh()  
+end)  
+ui.afk.MouseButton1Click:Connect(function()  
+CFG.AntiAFK = not CFG.AntiAFK  
+refresh()  
 end)
 
 hideBtn.MouseButton1Click:Connect(function()  
@@ -1115,6 +1162,32 @@ notify("Menu gagal: " .. tostring(buildErr))
 return  
 end
 
+local function antiAfkPulse()  
+pcall(function()  
+VirtualUser:CaptureController()  
+VirtualUser:ClickButton2(Vector2.new())  
+end)  
+local hum = humanoid()  
+if hum and hum.Health > 0 then  
+hum:ChangeState(Enum.HumanoidStateType.Jumping)  
+end  
+end
+
+player.Idled:Connect(function()  
+if CFG.AntiAFK then  
+antiAfkPulse()  
+end  
+end)
+
+task.spawn(function()  
+while true do  
+task.wait(CFG.AfkInterval)  
+if CFG.AntiAFK then  
+pcall(antiAfkPulse)  
+end  
+end  
+end)
+
 local function captureBase(ch)  
 local hum = ch:WaitForChild("Humanoid", 10)  
 if hum then  
@@ -1126,9 +1199,7 @@ end
 if player.Character then  
 task.spawn(captureBase, player.Character)  
 end  
-player.CharacterAdded:Connect(function(ch)  
-captureBase(ch)  
-end)
+player.CharacterAdded:Connect(captureBase)
 
 task.spawn(function()  
 local ch = player.Character or player.CharacterAdded:Wait()  
@@ -1148,20 +1219,6 @@ task.spawn(function()
 while true do  
 task.wait(0.25)  
 pcall(checkWater)  
-end  
-end)
-
-task.spawn(function()  
-while true do  
-task.wait(0.2)  
-pcall(function()  
-if CFG.ReturnToZone and zone and carrying() then  
-local r = getRoot()  
-if r and (r.Position - zone).Magnitude > CFG.ReturnRadius then  
-moveTo(zone)  
-end  
-end  
-end)  
 end  
 end)
 
