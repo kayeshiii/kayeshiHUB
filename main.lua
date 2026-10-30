@@ -152,12 +152,14 @@ for _, name in ipairs(EGG_NAMES) do
 EGG_LOWER[string.lower(name)] = true  
 end
 
+local EGG_PATTERNS = {"egg"}
+
 local RARITY_RANK = {  
 common = 1, uncommon = 2, rare = 3, epic = 4, legendary = 5,  
 mythic = 6, mythical = 6, divine = 7, secret = 8, exotic = 8,  
 }
 
-local BAD_WORDS = {"hatch", "incubat", "shop", "sell", "display", "showcase", "inventory", "machine"}
+local BAD_WORDS = {"hatch", "incubat", "shop", "sell", "display", "showcase", "inventory", "machine", "tukar", "exchange", "trade", "swap", "merchant", "vendor", "npc"}
 
 local CFG = {  
 Farming = true,  
@@ -175,8 +177,10 @@ JumpPower = 50,
 SwimOn = true,  
 SwimSpeed = 50,  
 AntiAFK = true,  
+PumpkinOn = false,  
+PumpkinAutoDelay = 20,  
 Offset = Vector3.new(0, 3, 0),  
-ActionDelay = 0.05,  
+ActionDelay = 0.1,  
 ESPDelay = 0.6,  
 IgnoreTime = 8,  
 ReturnRadius = 8,  
@@ -210,6 +214,7 @@ local carryStart = 0
 local baseWalk, baseJump = 16, 50  
 local forcedWalk = false  
 local inWaterNow = false  
+local pumpkinTouched = false  
 local refresh = function() end
 
 local function make(class, props, parent)  
@@ -319,7 +324,7 @@ if string.find(k, "rarity") or string.find(k, "tier") then
 return value  
 end  
 end  
-local v = obj:FindFirstChild("Rarity", true)  
+local v = obj:FindFirstChild("Rarity")  
 if v and v:IsA("ValueBase") then  
 return v.Value  
 end  
@@ -327,12 +332,7 @@ return nil
 end
 
 local function rarityOf(model)  
-local raw  
-local node = model  
-while node and node ~= workspace and raw == nil do  
-raw = readRarityValue(node)  
-node = node.Parent  
-end  
+local raw = readRarityValue(model)  
 if raw == nil then  
 return nil, 0  
 end  
@@ -343,22 +343,30 @@ local text = tostring(raw)
 return text, rankOfText(text)  
 end
 
-local function eggOf(prompt)  
+local function matchesAny(name, patterns)  
+for _, p in ipairs(patterns) do  
+if string.find(name, p) then  
+return true  
+end  
+end  
+return false  
+end
+
+local function findTarget(prompt, patterns, exactSet)  
 if hasBad(prompt.ActionText) or hasBad(prompt.ObjectText) then  
 return nil  
 end  
 local exact, outer  
 local node = prompt.Parent  
 while node and node ~= workspace do  
-if hasBad(node.Name) then  
+if node:FindFirstChildOfClass("Humanoid") then  
 return nil  
 end  
 if node:IsA("Model") or node:IsA("BasePart") then  
 local n = string.lower(node.Name)  
-if EGG_LOWER[n] and not exact then  
+if exactSet and exactSet[n] and not exact then  
 exact = node  
-end  
-if node:IsA("Model") and string.find(n, "egg") then  
+elseif patterns and matchesAny(n, patterns) and not hasBad(n) then  
 outer = node  
 end  
 end  
@@ -440,6 +448,24 @@ end
 
 local scanCache, scanAt = {}, 0
 
+local function isUnderwater(pos)  
+local ok, res = pcall(function()  
+local region = Region3.new(pos - Vector3.new(2, 2, 2), pos + Vector3.new(2, 2, 2)):ExpandToGrid(4)  
+local mats, occs = workspace.Terrain:ReadVoxels(region, 4)  
+for x = 1, #mats do  
+for y = 1, #mats[x] do  
+for z = 1, #mats[x][y] do  
+if mats[x][y][z] == Enum.Material.Water and occs[x][y][z] > 0.5 then  
+return true  
+end  
+end  
+end  
+end  
+return false  
+end)  
+return ok and res or false  
+end
+
 local function scan(force)  
 if not force and os.clock() - scanAt < CFG.ScanCache then  
 return scanCache  
@@ -449,7 +475,7 @@ scanAt = os.clock()
 local found, seen = {}, {}  
 for _, prompt in ipairs(workspace:GetDescendants()) do  
 if prompt:IsA("ProximityPrompt") and prompt.Enabled then  
-local model = eggOf(prompt)  
+local model = findTarget(prompt, EGG_PATTERNS, EGG_LOWER)  
 if model and not seen[model] then  
 local part = partOf(model, prompt)  
 if part then  
@@ -458,7 +484,22 @@ addName(model.Name)
 local rarity, rank = rarityOf(model)  
 table.insert(found, {  
 model = model, prompt = prompt, part = part,  
-name = model.Name, rarity = rarity, rank = rank,  
+name = model.Name, rarity = rarity, rank = rank, kind = "egg",  
+})  
+end  
+end  
+end  
+end
+
+if CFG.PumpkinOn then  
+for _, obj in ipairs(workspace:GetDescendants()) do  
+if (obj:IsA("BasePart") or obj:IsA("Model")) and string.lower(obj.Name) == "pumpkin" and not seen[obj] then  
+local part = obj:IsA("BasePart") and obj or (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true))  
+local insidePumpkin = obj.Parent and string.lower(obj.Parent.Name) == "pumpkin"  
+if part and not insidePumpkin and not isUnderwater(part.Position) then  
+seen[obj] = true  
+table.insert(found, {  
+model = obj, part = part, name = "Pumpkin", rank = 0, kind = "pumpkin",  
 })  
 end  
 end  
@@ -472,45 +513,76 @@ end
 
 local function pickTarget(list, root)  
 local now = os.clock()  
-local best  
+local bestEgg, bestPump  
 local skipped = 0  
 for _, e in ipairs(list) do  
 e.dist = (e.part.Position - root.Position).Magnitude  
 local inZone = not (CFG.ZoneRadiusOn and zone) or (e.part.Position - zone).Magnitude <= CFG.ZoneRadius  
-if lists.farm.sel[e.name] and inZone and (ignored[e.model] or 0) < now then  
+local wanted = (e.kind == "pumpkin" and CFG.PumpkinOn) or (e.kind == "egg" and lists.farm.sel[e.name])  
+if wanted and inZone and (ignored[e.model] or 0) < now then  
 if zone and (e.part.Position - zone).Magnitude <= CFG.ZoneSkipRadius then  
 skipped += 1  
-else  
-if not best then  
-best = e  
-elseif CFG.BestFirst and e.rank ~= best.rank then  
-if e.rank > best.rank then  
-best = e  
+elseif e.kind == "egg" then  
+if not bestEgg  
+or (CFG.BestFirst and e.rank > bestEgg.rank)  
+or ((not CFG.BestFirst or e.rank == bestEgg.rank) and e.dist < bestEgg.dist) then  
+bestEgg = e  
 end  
-elseif e.dist < best.dist then  
-best = e  
-end  
+elseif not bestPump or e.dist < bestPump.dist then  
+bestPump = e  
 end  
 end  
 end  
 lastSkipped = skipped  
-return best  
+return bestEgg or bestPump  
 end
 
 local function collect(e)  
-if not getRoot() then  
-return false  
+local r = getRoot()  
+if not r then  
+return false, "karakter belum siap"  
 end  
-moveTo(e.part.Position + CFG.Offset)  
+local function gone()  
+if e.kind == "pumpkin" then  
+return not e.model:IsDescendantOf(workspace) or not e.part:IsDescendantOf(workspace)  
+end  
+return not e.prompt:IsDescendantOf(workspace)  
+or not e.prompt.Enabled  
+or not e.model:IsDescendantOf(workspace)  
+end  
+for _ = 1, 2 do  
+local heldBefore = holdingEgg()  
+moveTo(e.part.Position + Vector3.new(0, 2, 0))  
+task.wait(0.05)  
+if e.kind == "pumpkin" then  
+if typeof(firetouchinterest) ~= "function" then  
+return false, "executor tidak mendukung firetouchinterest"  
+end  
+local root = getRoot()  
+if root then  
+firetouchinterest(root, e.part, 0)  
+firetouchinterest(root, e.part, 1)  
+end  
+else  
 if typeof(fireproximityprompt) == "function" then  
 fireproximityprompt(e.prompt)  
 else  
 e.prompt:InputHoldBegin()  
-task.wait(e.prompt.HoldDuration)  
+task.wait(e.prompt.HoldDuration + 0.05)  
 e.prompt:InputHoldEnd()  
 end  
-task.wait(0.1)  
-return holdingEgg() or not e.prompt:IsDescendantOf(workspace)  
+end  
+for _ = 1, 6 do  
+task.wait(0.05)  
+if gone() then  
+return true  
+end  
+if e.kind == "egg" and not heldBefore and holdingEgg() then  
+return true  
+end  
+end  
+end  
+return false, "belum terambil setelah disentuh"  
 end
 
 local function returnToZone()  
@@ -537,11 +609,11 @@ end
 local target = pickTarget(scan(), r)  
 if not target then  
 if detected == 0 then  
-status = "Tidak ada egg di area ini"  
+status = "Tidak ada egg/pumpkin di area ini"  
 elseif lastSkipped > 0 then  
-status = "Dilewati " .. lastSkipped .. " egg di radius zona"  
+status = "Dilewati " .. lastSkipped .. " target di radius zona"  
 else  
-status = "Tidak ada egg yang lolos filter"  
+status = "Tidak ada target yang lolos filter"  
 end  
 return  
 end  
@@ -550,13 +622,14 @@ refresh()
 if not CFG.Farming then  
 return  
 end  
-if collect(target) then  
+local ok, reason = collect(target)  
+if ok then  
 farmed += 1  
 status = "Diambil " .. target.name  
 returnToZone()  
 else  
 ignored[target.model] = os.clock() + CFG.IgnoreTime  
-status = "Gagal ambil " .. target.name  
+status = "Gagal ambil " .. target.name .. ": " .. tostring(reason)  
 end  
 end
 
@@ -571,11 +644,11 @@ best = e
 end  
 end  
 if not best then  
-status = "Tidak ada egg terdeteksi"  
+status = "Tidak ada egg/pumpkin terdeteksi"  
 notify(status)  
 return  
 end  
-local parts = {"rank=" .. tostring(best.rank), "rarity=" .. tostring(best.rarity)}  
+local parts = {"rank=" .. tostring(best.rank), "rarity=" .. tostring(best.rarity), "kind=" .. best.kind}  
 for k, v in pairs(best.model:GetAttributes()) do  
 table.insert(parts, k .. "=" .. tostring(v))  
 end  
@@ -651,7 +724,7 @@ local function updateESP(list)
 local root = getRoot()  
 local keep = {}  
 for _, e in ipairs(list) do  
-if espAllowed(e.name) and e.model.Parent then  
+if (e.kind == "pumpkin" or espAllowed(e.name)) and e.model.Parent then  
 keep[e.model] = true  
 local item = espItems[e.model]  
 if not item then  
@@ -931,7 +1004,11 @@ local probeBtn = btn(pageEgg, "Info egg", C.Dark, 26)
 probeBtn.Size = UDim2.new(1 / 3, -4, 0, 26)  
 probeBtn.Position = UDim2.new(2 / 3, 4, 0, 0)  
 ui.radius = btn(pageEgg, "", C.Dark, 26)  
+ui.radius.Size = UDim2.new(0.5, -3, 0, 26)  
 ui.radius.Position = UDim2.fromOffset(0, 30)  
+ui.pump = btn(pageEgg, "", C.Dark, 26)  
+ui.pump.Size = UDim2.new(0.5, -3, 0, 26)  
+ui.pump.Position = UDim2.new(0.5, 3, 0, 30)  
 lists.farm.box = newList(pageEgg, 60)
 
 ui.espToggle = btn(pageESP, "", C.Dark, 26)  
@@ -1012,7 +1089,8 @@ ui.info.Text = string.format("Terdeteksi %d  |  %s", detected, status)
 paintToggle(ui.farm, "Auto Farm", CFG.Farming)  
 paintToggle(ui.best, "Rarity tertinggi", CFG.BestFirst)  
 paintToggle(ui.ret, "Balik ke zona", CFG.ReturnToZone)  
-paintToggle(ui.radius, "Hanya dekat zona", CFG.ZoneRadiusOn)  
+paintToggle(ui.radius, "Dekat zona", CFG.ZoneRadiusOn)  
+paintToggle(ui.pump, "Pumpkin", CFG.PumpkinOn)  
 paintToggle(ui.espToggle, "ESP", CFG.ESP)  
 ui.espMode.Text = "Mode: " .. CFG.ESPMode  
 ui.espMode.BackgroundColor3 = C.Dark  
@@ -1048,6 +1126,12 @@ refresh()
 end)  
 ui.radius.MouseButton1Click:Connect(function()  
 CFG.ZoneRadiusOn = not CFG.ZoneRadiusOn  
+refresh()  
+end)  
+ui.pump.MouseButton1Click:Connect(function()  
+pumpkinTouched = true  
+CFG.PumpkinOn = not CFG.PumpkinOn  
+status = CFG.PumpkinOn and "Pumpkin nyala" or "Pumpkin mati"  
 refresh()  
 end)  
 zoneBtn.MouseButton1Click:Connect(function()  
@@ -1162,6 +1246,15 @@ notify("Menu gagal: " .. tostring(buildErr))
 return  
 end
 
+task.delay(CFG.PumpkinAutoDelay, function()  
+if pumpkinTouched then  
+return  
+end  
+CFG.PumpkinOn = true  
+status = "Pumpkin nyala otomatis"  
+pcall(refresh)  
+end)
+
 local function antiAfkPulse()  
 pcall(function()  
 VirtualUser:CaptureController()  
@@ -1251,4 +1344,4 @@ end
 end  
 end)
 
-notify("kayeshiHUB aktif. Tekan K untuk menu.")
+notify("kayeshiHUB aktif. Tekan K untuk menu.")  
