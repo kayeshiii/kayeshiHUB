@@ -52,33 +52,77 @@ corner(b, 7)
 return b  
 end
 
--- Urutan ini dipakai sebagai tingkat rarity: atas = umum, bawah = langka.  
-local EGG_NAMES = {  
-"Common Egg", "Coral Egg", "Reef Egg", "Tidal Egg", "Deep Egg", "Abyss Egg",  
-"Trench Egg", "Sovereign Egg", "Celestial Egg", "Eternal Egg", "Coral Reef Egg",  
-"Glacial Spiral Egg", "Amethyst Spiral Egg", "Azure Crown Egg", "Solar Orbit Egg",  
-"Spikey Egg", "Mamba Egg", "Inferno Egg", "Kraken Glory Egg",  
-"Admin Abuse Seraph Egg", "KingKalolo Egg", "Golem Egg",  
+-- Urutan dari luck terendah (tier 1) ke tertinggi. Hanya egg di daftar ini yang dikenali.  
+local EGG_LIST = {  
+{"Common Egg", "1"},  
+{"Coral Egg", "20"},  
+{"Reef Egg", "400"},  
+{"Tidal Egg", "8K"},  
+{"Deep Egg", "160K"},  
+{"Abyss Egg", "3M"},  
+{"Trench Egg", "60M"},  
+{"Sovereign Egg", "1B"},  
+{"Celestial Egg", "20B"},  
+{"Kraken Glory Egg", "24B–140B"},  
+{"Eternal Egg", "70B"},  
+{"Admin Abuse Seraph Egg", "80B–2T"},  
+{"Coral Reef Egg", "90B"},  
+{"Glacial Spiral Egg", "115B"},  
+{"KingKalolo Egg", "130B–400B"},  
+{"Amethyst Spiral Egg", "140B"},  
+{"Azure Crown Egg", "170B"},  
+{"Solar Orbit Egg", "200B"},  
+{"Spikey Egg", "250B"},  
+{"Mamba Egg", "300B"},  
+{"Inferno Egg", "350B"},  
+{"Golem Egg", "500B–1T"},  
+{"Astral Vortex", "5T"},  
 }  
-local EGG_LOWER, EGG_TIER = {}, {}  
-for i, n in ipairs(EGG_NAMES) do  
-EGG_LOWER[string.lower(n)] = true  
-EGG_TIER[string.lower(n)] = i  
+local EGG_NAMES, EGG_LOWER, EGG_TIER, EGG_LUCK, EGG_CANON = {}, {}, {}, {}, {}  
+for i, e in ipairs(EGG_LIST) do  
+local key = string.lower(e[1])  
+EGG_NAMES[i] = e[1]  
+EGG_LOWER[key] = true  
+EGG_TIER[key] = i  
+EGG_LUCK[key] = e[2]  
+EGG_CANON[key] = e[1]  
+end  
+local EGG_KEYS = {}  
+for k in pairs(EGG_LOWER) do  
+table.insert(EGG_KEYS, k)  
+end  
+table.sort(EGG_KEYS, function(a, b)  
+return #a > #b  
+end)
+
+local function eggKeyOf(name)  
+local n = string.lower(name or "")  
+if EGG_LOWER[n] then  
+return n  
+end  
+for _, k in ipairs(EGG_KEYS) do  
+if string.find(n, k, 1, true) then  
+return k  
+end  
+end  
+return nil  
 end
 
-local RARITY = {  
-{"uncommon", 2}, {"common", 1}, {"rare", 3}, {"epic", 4}, {"legendary", 5},  
-{"mythical", 6}, {"mythic", 6}, {"divine", 7}, {"secret", 8}, {"exotic", 8},  
-}  
-local MIN_STEPS = {{"Semua", 0}, {"Celestial+", 9}, {"Solar+", 15}, {"Kraken+", 19}}  
+local MIN_STEPS = {{"Semua", 0}, {"Sovereign+", 8}, {"Celestial+", 9}, {"Kraken+", 10}, {"Golem+", 22}}  
 local BAD_EGG = {  
 "hatch", "incubat", "place", "plant", "shop", "inventory", "inventori", "simpan", "backpack",  
 "machine", "npc", "penjaga", "tukar", "exchange", "buy", "beli",  
 }  
+local ESP_BAD = {"shop", "npc", "inventory", "backpack", "mudagen", "mudargen"}  
 local TOKEN_WORDS = {"token"}  
-local PUMPKIN_WORDS = {"pumpkin", "labu"}  
+local PUMPKIN_WORDS = {"pumpkin"}  
+local PUMPKIN_BAD = {"ember pumpkin citadel"}  
+local COLLECT_BAD = {  
+"generator", "shop", "tukar", "exchange", "trade", "swap", "sell", "buy", "npc", "machine", "merchant",  
+}  
 local PLACE_WORDS = {"place", "plant", "incubat"}  
-local HATCH_WORDS = {"hatch"}
+local HATCH_WORDS = {"hatch"}  
+local INVENTORY_WORDS = {"put to inventory"}
 
 local SHOPS = {  
 {id = "radar", label = "Radar Shop", kw = "radar", auto = "AutoRadar", npc = {"mudagen", "mudargen"}, items = {  
@@ -100,7 +144,9 @@ local CFG = {
 Farm = true, RarityFirst = true, MinRank = 0, StealWait = 0.8, IgnoreTime = 8, HoldTimeout = 6,  
 AntiAFK = true, AfkIdle = 300, AutoSave = true,  
 CollectToken = false, CollectPumpkin = false, CollectDelay = 1.5, CollectStand = 1,  
+EggESP = false,  
 Place = false, PlaceCd = 2,  
+AutoInv = true, InvCd = 2, InvWindow = 6,  
 Hatch = false, HatchCd = 3,  
 AutoRadar = false, AutoFeed = false, OpenCd = 12,  
 Boss = false, Dodge = true, FireRange = 150, FireInterval = 0.15, DodgeRadius = 3, DodgeStep = 14, FireTool = "",  
@@ -108,14 +154,18 @@ Walk = false, WalkSpeed = 16, Jump = false, JumpPower = 50,
 }
 
 local S = {  
-status = "Memuat...", steal = 0, place = 0, hatch = 0, collect = 0,  
+status = "Memuat...", steal = 0, place = 0, hatch = 0, collect = 0, inv = 0,  
 shop = 0, dodge = 0, shots = 0, detected = 0, errors = 0, config = "-",  
 }
 
-local eggSel, eggList, eggKeys, eggGrids, paints = {}, {}, {}, {}, {}  
-local ignored, cooldowns, rarityCache = {}, {}, {}  
+local eggSel, espSel = {}, {}  
+local eggList, eggKeys, eggGrids, paints = {}, {}, {}, {}  
+local ignored, cooldowns = {}, {}  
+local espItems = {}  
 local caches = {prompts = {list = {}, at = 0}, eggs = {list = {}, at = 0}, collect = {list = {}, at = 0}, boss = {val = nil, at = 0}}  
+local espCache, espAt = {}, 0  
 local heldCache, heldAt = nil, 0  
+local lastStealAt, lastStealName = 0, nil  
 local shopNext = {radar = 0, feed = 0}  
 local shopBusy = false  
 local shopCheckAt = 0  
@@ -232,6 +282,10 @@ if obj:IsA("ProximityPrompt") or obj:IsA("BasePart") or obj:IsA("Model") then
 promptsDirty = true  
 caches.eggs.at = 0  
 caches.collect.at = 0  
+espAt = 0  
+for k in pairs(ignored) do  
+ignored[k] = nil  
+end  
 end  
 end)
 
@@ -317,24 +371,24 @@ end)
 return ok  
 end
 
-local function eggOn(name)  
-return eggSel[string.lower(name)] ~= false  
+local function eggOnKey(sel, key)  
+return sel[key] ~= false  
 end
 
 local function paintEgg(en)  
-local on = eggOn(en.name)  
+for _, rec in ipairs(en.btns) do  
+local on = rec.sel[en.key] ~= false  
 local text = (on and "[x] " or "[ ] ") .. en.name  
-if en.rarity then  
+if en.rarity and rec.showRarity then  
 text = text .. " | " .. en.rarity  
 end  
-for _, b in ipairs(en.buttons) do  
-b.Text = text  
-b.BackgroundColor3 = on and C.Light or C.Row  
-b.TextColor3 = on and C.Ink or C.Muted  
+rec.button.Text = text  
+rec.button.BackgroundColor3 = on and C.Light or C.Row  
+rec.button.TextColor3 = on and C.Ink or C.Muted  
 end  
 end
 
-local function attachEgg(en, grid)  
+local function attachEgg(en, grid, sel)  
 local b = btn(grid, "", C.Row, 24)  
 b.Font = Enum.Font.Gotham  
 b.TextSize = 10  
@@ -342,10 +396,10 @@ b.TextXAlignment = Enum.TextXAlignment.Left
 b.LayoutOrder = en.order  
 make("UIPadding", {PaddingLeft = UDim.new(0, 7)}, b)  
 b.MouseButton1Click:Connect(function()  
-eggSel[en.key] = not eggOn(en.name)  
+sel[en.key] = not (sel[en.key] ~= false)  
 refresh()  
 end)  
-table.insert(en.buttons, b)  
+table.insert(en.btns, {button = b, sel = sel, showRarity = sel == eggSel})  
 paintEgg(en)  
 end
 
@@ -355,88 +409,34 @@ local en = eggKeys[key]
 if en then  
 return en  
 end  
-en = {name = name, key = key, buttons = {}, order = #eggList + 1}  
+en = {name = name, key = key, btns = {}, order = #eggList + 1}  
 eggKeys[key] = en  
 table.insert(eggList, en)  
-for _, grid in ipairs(eggGrids) do  
-attachEgg(en, grid)  
+for _, g in ipairs(eggGrids) do  
+attachEgg(en, g.frame, g.sel)  
 end  
 return en  
 end
 
-local function setEggs(value)  
+local function setEggs(sel, value)  
 for _, en in ipairs(eggList) do  
-eggSel[en.key] = value  
+sel[en.key] = value  
 end  
 refresh()  
 end
 
-local function rankOf(text)  
-local lower = string.lower(tostring(text))  
-local best, label = 0, nil  
-for _, rw in ipairs(RARITY) do  
-if rw[2] > best and string.find(lower, "%f[%a]" .. rw[1] .. "%f[%A]") then  
-best = rw[2]  
-label = string.upper(string.sub(rw[1], 1, 1)) .. string.sub(rw[1], 2)  
-end  
-end  
-return best, label  
-end
-
-local function rarityLabel(model, prompt)  
-local found = {}  
-local function push(v)  
-if v ~= nil then  
-table.insert(found, v)  
-end  
-end  
-push(model:GetAttribute("Rarity"))  
-for k, v in pairs(model:GetAttributes()) do  
-local lk = string.lower(k)  
-if string.find(lk, "rarity", 1, true) or string.find(lk, "tier", 1, true) then  
-push(v)  
-end  
-end  
-for _, d in ipairs(model:GetDescendants()) do  
-if d:IsA("ValueBase") and string.find(string.lower(d.Name), "rarity", 1, true) then  
-push(d.Value)  
-elseif (d:IsA("TextLabel") or d:IsA("TextButton")) and d.Text ~= "" then  
-push(d.Text)  
-end  
-end  
-if prompt then  
-push(prompt.ObjectText)  
-push(prompt.ActionText)  
-end  
-for _, v in ipairs(found) do  
-if type(v) == "string" then  
-local rank, label = rankOf(v)  
-if rank > 0 then  
-return label  
-end  
-end  
-end  
-return nil  
-end
-
 local function eggModelOf(prompt)  
 local node = prompt.Parent  
-local exact, outer  
 while node and node ~= workspace do  
 if node:FindFirstChildOfClass("Humanoid") then  
 return nil  
 end  
-if node:IsA("Model") or node:IsA("BasePart") then  
-local n = string.lower(node.Name)  
-if EGG_LOWER[n] then  
-exact = exact or node  
-elseif not outer and string.find(n, "egg", 1, true) and not hasAny(n, BAD_EGG) then  
-outer = node  
-end  
+if (node:IsA("Model") or node:IsA("BasePart")) and eggKeyOf(node.Name) then  
+return node  
 end  
 node = node.Parent  
 end  
-return exact or outer  
+return nil  
 end
 
 local function scanEggs(force)  
@@ -451,18 +451,14 @@ if not hasAny(en.text, BAD_EGG) and not shopOfPrompt(en) then
 local model = eggModelOf(en.prompt)  
 if model and not seen[model] then  
 seen[model] = true  
-local egg = addEgg(model.Name)  
-local tier = EGG_TIER[string.lower(model.Name)] or 0  
-local rc = rarityCache[model]  
-if not rc or os.clock() - rc.at > 3 then  
-rc = {label = rarityLabel(model, en.prompt), at = os.clock()}  
-rarityCache[model] = rc  
-end  
-local label = rc.label or (tier > 0 and ("Tier " .. tier) or nil)  
-egg.rarity = label  
+local key = eggKeyOf(model.Name)  
+local canon = EGG_CANON[key]  
+local egg = addEgg(canon)  
+egg.rarity = "Luck " .. EGG_LUCK[key]  
+local part = partOf and partOf(model, en.prompt) or en.part  
 table.insert(out, {  
 model = model, prompt = en.prompt, part = en.part,  
-name = model.Name, rarity = label, rank = tier,  
+name = canon, key = key, rarity = egg.rarity, rank = EGG_TIER[key],  
 })  
 end  
 end  
@@ -470,6 +466,93 @@ end
 S.detected = #out  
 c.list = out  
 return out  
+end
+
+local function scanEsp()  
+if os.clock() - espAt < 0.5 then  
+return espCache  
+end  
+espAt = os.clock()  
+local out, seen = {}, {}  
+local ch = player.Character  
+for _, obj in ipairs(workspace:GetDescendants()) do  
+if (obj:IsA("Model") or obj:IsA("BasePart")) and not seen[obj] then  
+local key = eggKeyOf(obj.Name)  
+local parentIsEgg = obj:IsA("BasePart") and obj.Parent and eggKeyOf(obj.Parent.Name)  
+if key and not parentIsEgg and not (ch and obj:IsDescendantOf(ch)) and not hasAny(chainOf(obj), ESP_BAD) then  
+seen[obj] = true  
+local part = obj:IsA("BasePart") and obj or (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true))  
+if part then  
+table.insert(out, {model = obj, part = part, name = EGG_CANON[key], key = key, luck = EGG_LUCK[key]})  
+end  
+end  
+end  
+end  
+espCache = out  
+return out  
+end
+
+local function clearEggEsp()  
+for model, item in pairs(espItems) do  
+pcall(function()  
+item.hl:Destroy()  
+item.bb:Destroy()  
+end)  
+espItems[model] = nil  
+end  
+end
+
+local function updateEggEsp()  
+if not CFG.EggESP then  
+if next(espItems) then  
+clearEggEsp()  
+end  
+return  
+end  
+local root = getRoot()  
+local keep = {}  
+for _, e in ipairs(scanEsp()) do  
+if e.model.Parent and e.part.Parent and eggOnKey(espSel, e.key) then  
+keep[e.model] = true  
+local item = espItems[e.model]  
+if not item then  
+local hl = make("Highlight", {  
+FillColor = C.Light,  
+FillTransparency = 0.6,  
+OutlineColor = C.Text,  
+DepthMode = Enum.HighlightDepthMode.AlwaysOnTop,  
+}, e.model)  
+local bb = make("BillboardGui", {  
+Size = UDim2.fromOffset(220, 22),  
+StudsOffset = Vector3.new(0, 3, 0),  
+AlwaysOnTop = true,  
+Adornee = e.part,  
+}, e.part)  
+local lb = make("TextLabel", {  
+Size = UDim2.fromScale(1, 1),  
+BackgroundColor3 = C.Panel,  
+BackgroundTransparency = 0.2,  
+TextColor3 = C.Text,  
+Font = Enum.Font.GothamSemibold,  
+TextSize = 11,  
+}, bb)  
+corner(lb, 6)  
+item = {hl = hl, bb = bb, lb = lb}  
+espItems[e.model] = item  
+end  
+local dist = root and math.floor((e.part.Position - root.Position).Magnitude) or 0  
+item.lb.Text = e.name .. " | Luck " .. e.luck .. " | " .. dist .. " m"  
+end  
+end  
+for model, item in pairs(espItems) do  
+if not keep[model] or not model.Parent then  
+pcall(function()  
+item.hl:Destroy()  
+item.bb:Destroy()  
+end)  
+espItems[model] = nil  
+end  
+end  
 end
 
 local function pickEgg(list)  
@@ -481,7 +564,7 @@ local best
 local now = os.clock()  
 for _, e in ipairs(list) do  
 e.dist = (e.part.Position - r.Position).Magnitude  
-if eggOn(e.name) and e.rank >= CFG.MinRank and (ignored[e.model] or 0) < now then  
+if eggOnKey(eggSel, e.key) and e.rank >= CFG.MinRank and (ignored[e.model] or 0) < now then  
 if not best then  
 best = e  
 elseif CFG.RarityFirst and e.rank ~= best.rank then  
@@ -506,18 +589,13 @@ local ch = player.Character
 if not ch then  
 return nil  
 end  
-local fallback  
 for _, d in ipairs(ch:GetDescendants()) do  
-local n = string.lower(d.Name)  
-if EGG_LOWER[n] then  
-heldCache = d.Name  
+local key = eggKeyOf(d.Name)  
+if key then  
+heldCache = EGG_CANON[key]  
 break  
 end  
-if not fallback and string.find(n, "egg", 1, true) and not hasAny(n, BAD_EGG) then  
-fallback = d.Name  
 end  
-end  
-heldCache = heldCache or fallback  
 return heldCache  
 end
 
@@ -530,8 +608,27 @@ backToZone()
 return ok  
 end
 
+local function inventoryTick(egg)  
+if not CFG.AutoInv then  
+return false  
+end  
+local en = findPrompt(INVENTORY_WORDS)  
+if not en then  
+if os.clock() - lastStealAt < CFG.InvWindow then  
+S.status = "Prompt Put To Inventory tidak ketemu"  
+end  
+return false  
+end  
+cooldowns[en.prompt] = os.clock() + CFG.InvCd  
+lastStealAt = 0  
+S.status = "Put to inventory " .. tostring(egg)  
+useMachine(en)  
+S.inv += 1  
+return true  
+end
+
 local function placeEgg(egg)  
-if not CFG.Place or not eggOn(egg) then  
+if not CFG.Place then  
 return false  
 end  
 local en = findPrompt(PLACE_WORDS)  
@@ -550,18 +647,26 @@ end
 
 local function holdingTick()  
 local egg = heldEgg(true)  
-if not egg then  
+local recent = CFG.AutoInv and lastStealName ~= nil and os.clock() - lastStealAt < CFG.InvWindow  
+if not egg and not recent then  
 holdSince = 0  
 return false  
 end  
+egg = egg or lastStealName  
 if holdSince == 0 then  
 holdSince = os.clock()  
+end  
+if (recent or os.clock() - holdSince < CFG.HoldTimeout) and inventoryTick(egg) then  
+return true  
+end  
+if not heldEgg(true) then  
+return false  
 end  
 if placeEgg(egg) then  
 return true  
 end  
 if os.clock() - holdSince < CFG.HoldTimeout then  
-S.status = "Bawa " .. egg .. " ke safe zone"  
+S.status = "Bawa " .. egg .. " (tier " .. tostring(EGG_TIER[string.lower(egg)]) .. ") ke safe zone"  
 local r = getRoot()  
 if zone and r and (r.Position - zone).Magnitude > 6 then  
 tpTo(zone)  
@@ -626,14 +731,22 @@ S.hatch += 1
 return true  
 end
 
-local function kindOfText(s)  
-if hasAny(s, TOKEN_WORDS) then  
+local function kindOf(name)  
+local lower = string.lower(name or "")  
+if hasAny(lower, TOKEN_WORDS) then  
 return "token"  
 end  
-if hasAny(s, PUMPKIN_WORDS) then  
+if hasAny(lower, PUMPKIN_WORDS) then  
 return "pumpkin"  
 end  
 return nil  
+end
+
+local function collectOk(kind, chain, text)  
+if kind == "token" then  
+return not hasAny(chain, COLLECT_BAD) and not hasAny(text, COLLECT_BAD)  
+end  
+return not hasAny(chain, PUMPKIN_BAD) and not hasAny(chain, COLLECT_BAD) and not hasAny(text, PUMPKIN_BAD)  
 end
 
 local function collectTargets()  
@@ -645,8 +758,8 @@ c.at = os.clock()
 local out, seen = {}, {}  
 local ch = player.Character  
 for _, en in ipairs(getPrompts()) do  
-local kind = kindOfText(en.text) or kindOfText(en.chain)  
-if kind then  
+local kind = kindOf(en.text) or kindOf(en.chain)  
+if kind and collectOk(kind, en.chain, en.text) then  
 seen[en.prompt] = true  
 table.insert(out, {  
 prompt = en.prompt, part = en.part, key = en.prompt, kind = kind,  
@@ -656,13 +769,16 @@ end
 end  
 for _, obj in ipairs(workspace:GetDescendants()) do  
 if (obj:IsA("BasePart") or obj:IsA("Model")) and not (ch and obj:IsDescendantOf(ch)) then  
-local kind = kindOfText(string.lower(obj.Name))  
+local kind = kindOf(obj.Name)  
 if kind then  
+local chain = chainOf(obj)  
+if collectOk(kind, chain, string.lower(obj.Name)) then  
 local part = obj:IsA("BasePart") and obj or (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true))  
 local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)  
 if part and not seen[obj] and not (prompt and seen[prompt]) then  
 seen[obj] = true  
 table.insert(out, {model = obj, part = part, prompt = prompt, key = obj, kind = kind, name = obj.Name})  
+end  
 end  
 end  
 end  
@@ -1097,6 +1213,8 @@ local tag = target.rarity and (" (" .. target.rarity .. ")") or ""
 S.status = "Steal " .. target.name .. tag  
 if stealEgg(target) then  
 S.steal += 1  
+lastStealAt = os.clock()  
+lastStealName = target.name  
 S.status = "Dapat " .. target.name .. tag  
 elseif farmOn() then  
 ignored[target.model] = os.clock() + (target.prompt.Enabled and CFG.IgnoreTime or 1)  
@@ -1149,7 +1267,7 @@ end
 end
 
 local function buildData()  
-local data = {cfg = {}, eggs = {}}  
+local data = {cfg = {}, eggs = {}, esp = {}}  
 for k, v in pairs(CFG) do  
 local t = typeof(v)  
 if t == "boolean" or t == "number" or t == "string" then  
@@ -1158,6 +1276,9 @@ end
 end  
 for k, v in pairs(eggSel) do  
 data.eggs[k] = v  
+end  
+for k, v in pairs(espSel) do  
+data.esp[k] = v  
 end  
 return HttpService:JSONEncode(data)  
 end
@@ -1190,8 +1311,13 @@ applied += 1
 end  
 end  
 for k, v in pairs(data.eggs or {}) do  
-if type(v) == "boolean" then  
+if type(v) == "boolean" and EGG_LOWER[k] then  
 eggSel[k] = v  
+end  
+end  
+for k, v in pairs(data.esp or {}) do  
+if type(v) == "boolean" and EGG_LOWER[k] then  
+espSel[k] = v  
 end  
 end  
 syncMinIdx()  
@@ -1311,18 +1437,18 @@ end
 end)  
 end
 
-local function eggGrid(page)  
+local function eggGrid(page, sel)  
+local rows = math.ceil(#EGG_LIST / 2)  
 local grid = make("Frame", {  
-Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,  
-BackgroundTransparency = 1, LayoutOrder = nextOrder(),  
+Size = UDim2.new(1, 0, 0, rows * 30), BackgroundTransparency = 1, LayoutOrder = nextOrder(),  
 }, page)  
 make("UIGridLayout", {  
 CellSize = UDim2.new(0.5, -4, 0, 24), CellPadding = UDim2.fromOffset(8, 6),  
 SortOrder = Enum.SortOrder.LayoutOrder,  
 }, grid)  
-table.insert(eggGrids, grid)  
+table.insert(eggGrids, {frame = grid, sel = sel})  
 for _, en in ipairs(eggList) do  
-attachEgg(en, grid)  
+attachEgg(en, grid, sel)  
 end  
 end
 
@@ -1415,9 +1541,9 @@ corner(side, 10)
 make("UIPadding", {PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8)}, side)  
 make("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}, side)  
 local tabs = {}  
-local TABS = {{"main", "Main"}, {"auto", "Auto"}, {"shop", "Shop"}, {"event", "Event"}, {"discord", "Discord"}}  
+local TABS = {{"main", "Main"}, {"auto", "Auto"}, {"shop", "Shop"}, {"esp", "ESP"}, {"event", "Event"}, {"discord", "Discord"}}  
 for i, t in ipairs(TABS) do  
-local b = btn(side, t[2], C.Card, 32)  
+local b = btn(side, t[2], C.Card, 30)  
 b.LayoutOrder = i  
 b.TextSize = 12  
 tabs[t[1]] = b  
@@ -1449,7 +1575,7 @@ make("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.Layou
 make("UIPadding", {PaddingRight = UDim.new(0, 8)}, page)  
 return page  
 end  
-local pages = {main = newPage(), auto = newPage(), shop = newPage(), event = newPage(), discord = newPage()}
+local pages = {main = newPage(), auto = newPage(), shop = newPage(), esp = newPage(), event = newPage(), discord = newPage()}
 
 local function row(page)  
 return make("Frame", {Size = UDim2.new(1, 0, 0, 28), BackgroundTransparency = 1, LayoutOrder = nextOrder()}, page)  
@@ -1527,22 +1653,23 @@ value.Text = string.format("%g", CFG[key])
 end  
 end
 
-local function eggControls(page)  
+local function eggControls(page, sel, minButton)  
 local r = row(page)  
 local all = btn(r, "Pilih semua", C.Dark, 28)  
 all.Size = UDim2.new(0.34, -4, 1, 0)  
 local none = btn(r, "Kosongkan", C.Dark, 28)  
 none.Size = UDim2.new(0.33, -4, 1, 0)  
 none.Position = UDim2.new(0.34, 3, 0, 0)  
+all.MouseButton1Click:Connect(function()  
+setEggs(sel, true)  
+end)  
+none.MouseButton1Click:Connect(function()  
+setEggs(sel, false)  
+end)  
+if minButton then  
 local minB = btn(r, "", C.Dark, 28)  
 minB.Size = UDim2.new(0.33, -4, 1, 0)  
 minB.Position = UDim2.new(0.67, 4, 0, 0)  
-all.MouseButton1Click:Connect(function()  
-setEggs(true)  
-end)  
-none.MouseButton1Click:Connect(function()  
-setEggs(false)  
-end)  
 minB.MouseButton1Click:Connect(function()  
 minIdx = minIdx % #MIN_STEPS + 1  
 CFG.MinRank = MIN_STEPS[minIdx][2]  
@@ -1551,15 +1678,16 @@ end)
 paints[#paints + 1] = function()  
 minB.Text = "Min: " .. MIN_STEPS[minIdx][1]  
 end  
-eggGrid(page)  
+end  
+eggGrid(page, sel)  
 end
 
-local mp, ap, sp, ep, dp = pages.main, pages.auto, pages.shop, pages.event, pages.discord
+local mp, ap, sp, esp, ep, dp = pages.main, pages.auto, pages.shop, pages.esp, pages.event, pages.discord
 
 section(mp, "Auto steal")  
-note(mp, "Teleport ke egg, tekan prompt, lalu kembali ke safe zone. Rarity tertinggi dulu.")  
+note(mp, "Teleport ke egg, tekan prompt, lalu kembali ke safe zone. Tier tertinggi dulu.")  
 toggle(mp, "Auto steal", "Farm")  
-toggle(mp, "Rarity tertinggi dulu", "RarityFirst")  
+toggle(mp, "Tier tertinggi dulu", "RarityFirst")  
 stepper(mp, "Tunggu steal (detik)", "StealWait", 0.1, 0.1, 2)  
 stepper(mp, "Batas bawa egg (detik)", "HoldTimeout", 1, 1, 30)
 
@@ -1677,9 +1805,8 @@ end
 refresh()  
 end)
 
-section(mp, "Filter egg")  
-eggControls(mp)  
-local probeBtn = btn(mp, "Cek egg terdekat (rarity)", C.Dark, 28)  
+section(mp, "Cek")  
+local probeBtn = btn(mp, "Cek egg terdekat (luck)", C.Dark, 28)  
 probeBtn.LayoutOrder = nextOrder()  
 probeBtn.MouseButton1Click:Connect(function()  
 local r = getRoot()  
@@ -1690,14 +1817,20 @@ best = e
 end  
 end  
 if best then  
-S.status = best.name .. " | tier: " .. tostring(best.rank)  
+S.status = best.name .. " | " .. best.rarity .. " | tier " .. tostring(best.rank)  
 notify(S.status)  
 else  
-S.status = "Tidak ada egg terdeteksi"  
+S.status = "Tidak ada egg dari daftar terdeteksi"  
 end  
 refresh()  
 end)
 
+section(ap, "Filter egg untuk steal, place, dan inventory")  
+note(ap, "Egg yang tidak dicentang tidak akan di-steal atau di-place.")  
+section(ap, "Auto inventory")  
+note(ap, "Setelah steal, atau saat memegang egg, teleport ke prompt 'Put To Inventory' lalu tekan. Dijalankan sebelum Auto Place.")  
+toggle(ap, "Auto Inventory", "AutoInv")  
+stepper(ap, "Cooldown inventory (detik)", "InvCd", 0.5, 0.5, 10)  
 section(ap, "Auto place")  
 note(ap, "Auto Place hanya berjalan saat karakter memegang egg. Teleport ke mesin place lalu tekan prompt.")  
 toggle(ap, "Auto Place", "Place")  
@@ -1706,8 +1839,7 @@ section(ap, "Auto hatch")
 note(ap, "Saat tidak pegang egg, teleport ke mesin hatch terdekat lalu tekan prompt.")  
 toggle(ap, "Auto Hatch", "Hatch")  
 stepper(ap, "Cooldown hatch (detik)", "HatchCd", 0.5, 0.5, 30)  
-section(ap, "Filter egg untuk place")  
-eggControls(ap)
+eggControls(ap, eggSel, false)
 
 section(sp, "Auto buka shop")  
 note(sp, "Radar Shop lewat NPC Mudagen, Feed Shop lewat NPC Alex. Auto beli sudah dihapus.")  
@@ -1742,11 +1874,21 @@ notify(S.status)
 refresh()  
 end)
 
+section(esp, "Egg ESP")  
+note(esp, "Menandai egg yang dicentang di bawah dengan nama, luck, dan jarak. Egg yang baru spawn ikut terdeteksi.")  
+toggle(esp, "Egg ESP", "EggESP", function()  
+if not CFG.EggESP then  
+clearEggEsp()  
+end  
+end)  
+section(esp, "Filter ESP")  
+eggControls(esp, espSel, false)
+
 section(ep, "Auto collect token")  
-note(ep, "Teleport ke objek atau prompt yang namanya mengandung 'token' lalu ambil.")  
+note(ep, "Teleport ke objek atau prompt yang namanya mengandung 'token'. Area token generator diabaikan.")  
 toggle(ep, "Collect token", "CollectToken")  
 section(ep, "Auto collect pumpkin")  
-note(ep, "Teleport ke objek atau prompt yang namanya mengandung 'pumpkin' atau 'labu' lalu ambil.")  
+note(ep, "Teleport ke objek atau prompt yang namanya mengandung 'pumpkin'. Ember Pumpkin Citadel diabaikan.")  
 toggle(ep, "Collect pumpkin", "CollectPumpkin")  
 section(ep, "Jeda ambil")  
 note(ep, "Jeda ini berlaku di antara setiap pengambilan token maupun pumpkin.")  
@@ -1798,8 +1940,8 @@ paintEgg(en)
 end  
 end  
 paints[#paints + 1] = function()  
-subtitle.Text = string.format("Steal %d | Collect %d | Place %d | Hatch %d | Shop %d | Boss %d | Hindar %d",  
-S.steal, S.collect, S.place, S.hatch, S.shop, S.shots, S.dodge)  
+subtitle.Text = string.format("Steal %d | Collect %d | Place %d | Inv %d | Hatch %d | Shop %d | Boss %d | Hindar %d",  
+S.steal, S.collect, S.place, S.inv, S.hatch, S.shop, S.shots, S.dodge)  
 statusLbl.Text = string.format("%s | Terdeteksi %d | Config %s | Error %d", S.status, S.detected, S.config, S.errors)  
 end
 
@@ -1939,6 +2081,7 @@ end)
 
 loop("utama", 0.05, mainTick)  
 loop("boss", 0.05, bossTick)  
+loop("egg esp", 0.6, updateEggEsp)  
 loop("afk", 1, function()  
 if CFG.AntiAFK and os.clock() - lastActive >= CFG.AfkIdle then  
 lastActive = os.clock()  
